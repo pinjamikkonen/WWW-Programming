@@ -1,0 +1,13 @@
+<html>
+  <body>
+  <h1>Käyttäjät</h1>
+    <table>
+      <th>Rooli</th><th>Käyttäjätunnus</th><th>Sähköposti</th><th>Muokkaa</th><th>Kortti</th><th>Jäsenmaksun eräpäivä</th>
+      {{#each users}}
+      <tr><td>{{admin}}</td><td>{{username}}</td>
+      <td>{{email}}</td><td><a href="users/{{id}}">Näytä käyttäjä</a></td>
+      <td>{{credit}}</td><td>{{duedate}}</td></tr>
+      {{/each}}
+    </table>
+  </body>
+</html>

@@ -1,0 +1,1064 @@
+<!-- Pinja Mikkonen
+WWW'programming 2019 spring
+10ECTS coursework -->
+
+<div id = "root" ></div>
+<script src="https://unpkg.com/react@latest/umd/react.development.js"></script>
+<script src="https://unpkg.com/react-dom@latest/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/redux@latest/dist/redux.min.js"></script>
+<script src="https://unpkg.com/react-redux@latest/dist/react-redux.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/6.21.1/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/redux-thunk/2.2.0/redux-thunk.min.js"></script>
+<script type="text/babel">
+
+const {
+  createStore,
+  combineReducers,
+  bindActionCreators,
+  applyMiddleware,
+  compose
+} = Redux;
+
+const { connect, Provider } = ReactRedux;
+const thunkMiddleware = ReduxThunk.default;
+
+// Actions for logging in
+const REQUEST_TOKEN = "REQUEST_TOKEN";
+const RECEIVE_TOKEN = "RECEIVE TOKEN";
+const REMOVE_TOKEN = "REMOVE_TOKEN";
+const ERROR_TOKEN = "ERROR_TOKEN";
+
+// Actions for creating a new user
+const REQUEST_INSERT_USER = "REQUEST_INSERT_USER";
+const ERROR_INSERT_USER = "ERROR_INSERT_USER";
+const SUCCESS_INSERT_USER = "SUCCESS_INSERT_USER";
+
+// Actions for fetching user data
+const REQUEST_USER_DATA = "REQUEST_USER_DATA";
+const ERROR_USER_DATA = "ERROR_USER_DATA";
+const RECEIVE_USER_DATA = "RECEIVE_USER_DATA";
+
+// Actions for fetching list of users
+const REQUEST_USERS = "REQUEST_USERS";
+const ERROR_USERS = "ERROR_USERS";
+const RECEIVE_USERS = "RECEIVE_USERS";
+
+// Actions for modifying user data
+const REQUEST_MODIFY_DATA = "REQUEST_MODIFY_DATA";
+const ERROR_MODIFY_DATA = "ERROR_MODIFY_DATA";
+const SUCCESS_MODIFY_DATA = "SUCCESS_MODIFY_DATA";
+
+// Actions for deleting users
+const REQUEST_DELETE_USER = "REQUEST_DELETE_USER";
+const ERROR_DELETE_USER = "ERROR_DELETE_USER";
+const SUCCESS_DELETE_USER = "SUCCESS_DELETE_USER";
+
+// Action creators for requests
+function requestInsertUser(){
+  return { type: REQUEST_INSERT_USER };
+}
+
+function requestToken(){
+  return { type: REQUEST_TOKEN };
+}
+
+function requestUserData(){
+  return { type: REQUEST_USER_DATA };
+}
+
+function requestUsers(){
+  return { type: REQUEST_USERS };
+}
+
+function requestModifyData(){
+  return { type: REQUEST_MODIFY_DATA };
+}
+
+function requestDeleteUser(){
+  return {type: REQUEST_DELETE_USER };
+}
+
+// Action creators for errors
+function errorToken(error){
+  return { type: ERROR_TOKEN, error };
+}
+
+function errorInsertUser(error){
+  return { type: ERROR_INSERT_USER, error }
+}
+
+function errorUserData(error){
+  return { type: ERROR_USER_DATA, error }
+}
+
+function errorUsers(error){
+  return { type: ERROR_USERS, error }
+}
+
+function errorModifyData(error){
+  return { type: ERROR_MODIFY_DATA, error };
+}
+
+function errorDeleteUser(error){
+  return { type: ERROR_DELETE_USER, error };
+}
+
+// Action creators for successes
+function receiveToken(json){
+  return {
+    type: RECEIVE_TOKEN,
+    token: json.token,
+    admin: json.admin,
+    id: json.id,
+    receivedAt: Date.now()
+  };
+}
+
+function receiveUserData(json){
+  return {
+    type: RECEIVE_USER_DATA,
+    user: {
+      username:json.username,
+      email: json.email,
+      credit: json.credit,
+      duedate: json.duedate
+    },
+    receivedAt: Date.now()
+  };
+}
+
+function receiveUsers(json){
+  return {
+    type: RECEIVE_USERS,
+    users: Object.keys(json).reduce((object, key) => {
+      object[json[key]._id] = {
+        admin: json[key].admin,
+        username: json[key].username,
+        email: json[key].email,
+        credit: json[key].credit,
+        duedate: json[key].duedate,
+        id: json[key]._id
+      };
+      return object;
+    }, {}),
+    receivedAt: Date.now()
+  };
+}
+
+function successInsertUser(){
+  return { type: SUCCESS_INSERT_USER }
+}
+
+function successModifyData(json){
+  return {
+    type: SUCCESS_MODIFY_DATA,
+    user: {
+      username:json.username,
+      email: json.email,
+      credit: json.credit,
+      duedate: json.duedate
+    },
+    receivedAt: Date.now()
+  };
+}
+
+function successDeleteUser(){
+  return { type: SUCCESS_DELETE_USER };
+}
+
+// Action creator for logging out
+function logout(){
+  return {
+    type: REMOVE_TOKEN,
+    token: null,
+    admin: false,
+    id: null,
+  };
+}
+
+// AJAX
+
+// AJAX-call for modifying user data
+function modifyData(url, name, value){
+    return dispatch => {
+    dispatch(requestModifyData());
+    return fetch(url, {
+      method: "PUT",
+      headers: new Headers({
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + store.getState().token.token
+      }),
+      body: JSON.stringify({[name]: value}),
+    })
+    .then(response => {
+      if (response.ok) {
+        return response.json();
+      }
+      else {throw Error(response.status);}
+    }).then(
+      json => {
+        dispatch(successModifyData(json));
+        // When admin does the updating refresh user list
+        if (store.getState().token.admin){
+          store.dispatch(fetchUsers(url));
+        }
+      },
+      error => dispatch(errorModifyData(error.toString()))
+    );
+  }
+}
+
+// AJAX-call for logging in
+function login(username, password){
+  return dispatch => {
+    dispatch(requestToken());
+    return fetch("api/login", {
+      method: "POST",
+      headers: new Headers({
+        "Content-Type": "application/json",
+      }),
+      body: '{"username": "' + username + '", "password": "' + password + '"}'
+    }).then(response => {
+      if (response.ok) {
+        return response.json();
+      }
+      else {
+        throw Error(response.status);
+      }
+    }).then(
+      json => {
+        dispatch(receiveToken(json));
+        store.dispatch(fetchUserData("api/users/" + json.id));
+
+        // When admin logs in fetch userlist
+        if (store.getState().token.admin){
+          store.dispatch(fetchUsers());
+        }
+      },
+      error => {
+        dispatch(errorToken(error));
+      }
+    );
+  };
+}
+
+// AJAX-call for creating new user
+function addUser(username, email, password, credit){
+  return dispatch => {
+    dispatch(requestInsertUser());
+    return fetch("/api/users", {
+      method: "POST",
+      headers: new Headers({
+        "Content-Type": "application/json",
+      }),
+      body: JSON.stringify({"username": username, "email": email, "password": password, "credit": credit}),
+    })
+    .then(response => {
+      if (response.ok) {
+        return response.json();
+      }
+      else { throw Error(response.status); }
+    }).then(
+      json => {
+        dispatch(successInsertUser());
+
+        // When after new user registers they are logged in immediatedly
+        store.dispatch(login(username, password));
+      },
+      error => dispatch(errorInsertUser(error.toString()))
+    );
+  }
+}
+
+// AJAX-call for fetching user data
+function fetchUserData(url){
+  return dispatch => {
+    dispatch(requestUserData());
+    return fetch(url, {
+      method: "GET",
+      headers: new Headers({
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + store.getState().token.token
+      }),
+    })
+    .then(response => {
+      if (response.ok) {
+        return response.json();
+      }
+      else { throw Error(response.status); }
+    }).then(
+      json => dispatch(receiveUserData(json)),
+      error => dispatch(errorUserData(error.toString()))
+    );
+  }
+}
+
+// AJAX-call for fetching user list
+function fetchUsers(){
+  return dispatch => {
+    dispatch(requestUsers());
+    return fetch("api/users", {
+      method: "GET",
+      headers: new Headers({
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + store.getState().token.token
+      }),
+    })
+    .then(response => {
+      if (response.ok) {
+        return response.json();
+      }
+      else { throw Error(response.status) }
+    }).then(
+      json => dispatch(receiveUsers(json)),
+      error => dispatch(errorUsers(error.toString()))
+    );
+  }
+}
+
+// AJAX-call for deleting user
+function deleteUser(url){
+  console.log(url);
+  return dispatch => {
+    dispatch(requestDeleteUser());
+    return fetch(url, {
+      method: "DELETE",
+      headers: new Headers({
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + store.getState().token.token
+      }),
+    })
+    .then(response => {
+      if (response.ok) {
+        return response;
+      }
+      else { throw Error('Käyttäjän tietoja ei voitu poistaa!'); }
+    }).then(
+      response => {
+        dispatch(successDeleteUser());
+
+        // If admin deleted user refresh user list
+        if (store.getState().token.admin){
+          store.dispatch(fetchUsers());
+        }
+        // Otherwise initiate logout
+        else {
+          store.dispatch(logout());
+        }
+      },
+      error => dispatch(errorDeleteUser(error.toString()))
+    );
+  }
+}
+
+// REDUCERS
+
+// Reducer containing current user data + token
+function token(state = { admin: false, id: null, fetching: false, error: "" }, action) {
+  switch (action.type) {
+    case ERROR_TOKEN:
+      return {
+        ...state,
+        fetching: false,
+        error: action.error
+      };
+    case REQUEST_TOKEN:
+      return {
+        ...state,
+        fetching: true
+      };
+    case RECEIVE_TOKEN:
+      return {
+        ...state,
+        fetching: false,
+        token: action.token,
+        admin: action.admin,
+        id: action.id,
+        updated: action.receivedAt,
+        error: null
+      };
+    case REMOVE_TOKEN:
+      return {
+        ...state,
+        token: action.token,
+        admin: action.admin,
+        id: action.id,
+      }
+    default:
+      return state;
+  }
+}
+
+// Reducer containing user actions
+function userData(state = { fetching: false, error: ""}, action){
+  switch (action.type){
+    case REQUEST_INSERT_USER:
+      return {
+        ...state,
+        fetching: true
+      };
+    case ERROR_INSERT_USER:
+      return {
+        ...state,
+        fetching: false,
+        error: action.error
+      };
+    case SUCCESS_INSERT_USER:
+      return {
+        ...state,
+        fetching: false,
+        error: null,
+      };
+    case REQUEST_USER_DATA:
+      return {
+        ...state,
+        fetching: true
+      };
+    case ERROR_USER_DATA:
+      return {
+        ...state,
+        fetching: false,
+        error: action.error
+      };
+    case RECEIVE_USER_DATA:
+      return {
+        ...state,
+        fetching: false,
+        error: null,
+        user: action.user,
+        updated: action.receivedAt,
+      };
+      case REQUEST_MODIFY_DATA:
+        return {
+          ...state,
+          fetching: true
+        };
+      case ERROR_MODIFY_DATA:
+        return {
+          ...state,
+          fetching: false,
+          error: action.error
+        };
+      case SUCCESS_MODIFY_DATA:
+        return {
+          ...state,
+          fetching: false,
+          error: null,
+          updated: action.receivedAt,
+          user: action.user,
+        };
+        case REQUEST_DELETE_USER:
+          return {
+            ...state,
+            fetching: true
+          };
+        case ERROR_DELETE_USER:
+          return {
+            ...state,
+            fetching: false,
+            error: action.error
+          };
+        case SUCCESS_DELETE_USER:
+          return {
+            ...state,
+            fetching: false,
+            error: null,
+            updated: action.receivedAt,
+          };
+    default:
+      return state;
+  }
+}
+
+// Reducer containing userlist
+function userList(state = initialState, action){
+    switch (action.type){
+    case REQUEST_USERS:
+      return {
+        ...state,
+        fetching: true
+      };
+    case ERROR_USERS:
+      return {
+        ...state,
+        fetching: false,
+        error: action.error
+      };
+    case RECEIVE_USERS:
+      return {
+        ...state,
+        fetching: false,
+        error: null,
+        users: action.users,
+        updated: action.receivedAt,
+      };
+    default:
+      return state;
+  }
+}
+
+const initialState = {
+  fetching: false,
+  error: "",
+  admin: false,
+  id: null,
+}
+
+function lastAction(state = null, action) {
+  return action;
+}
+
+const reducer = combineReducers({
+  userData,
+  userList,
+  token,
+  lastAction,
+});
+
+const store = createStore(
+  reducer,
+  applyMiddleware(thunkMiddleware)
+);
+
+store.subscribe(() => {
+  console.log(store.getState());
+});
+
+// Component for navigation bar
+class Nav extends React.Component{
+
+  constructor(props){
+    super(props);
+    this.state = {}
+  }
+
+  // Change active tab in <AppContent />
+  handleClick(event, id){
+    event.preventDefault();
+    this.props.handleClick(id);
+  }
+
+  // Log user out is <AppContent />
+  handleLogout(event){
+    event.preventDefault();
+    this.props.handleLogout();
+  }
+
+  render(){
+    // Admin's navigation bar
+    if (this.props.admin){
+      return(
+      <div>
+        <a href="#" onClick={(e) => this.handleClick(e, 1)}>Etusivu</a><br />
+        <a href="#" onClick={(e) => this.handleClick(e, 2)}>Tietoa meistä</a><br />
+        <a href="#" onClick={(e) => this.handleClick(e, 4)}>Käyttäjät</a><br />
+        <a href="#" onClick={(e) => this.handleClick(e, 5)}>Profiili</a><br />
+        <a href="#" onClick={(e) => this.handleLogout(e)}>Kirjaudu ulos</a><br />
+      </div>
+    );
+    }
+    // Regular user's navigation bar
+    else if (this.props.id !== null){
+      return(
+        <div>
+          <a href="#" onClick={(e) => this.handleClick(e, 1)}>Etusivu</a><br />
+          <a href="#" onClick={(e) => this.handleClick(e, 2)}>Tietoa meistä</a><br />
+          <a href="#" onClick={(e) => this.handleClick(e, 5)}>Profiili</a><br />
+          <a href="#" onClick={(e) => this.handleLogout(e)}>Kirjaudu ulos</a><br />
+        </div>
+      );
+    }
+    // Unregistered user's navigation bar
+    else {
+      return(
+      <div>
+        <a href="#" id="1" onClick={(e) => this.handleClick(e, 1)}>Etusivu</a><br />
+        <a href="#" id="2" onClick={(e) => this.handleClick(e, 2)}>Tietoa meistä</a><br />
+        <a href="#" id="3" onClick={(e) => this.handleClick(e, 3)}>Kirjaudu sisään</a><br />
+      </div>
+      );
+    }
+  }
+}
+
+// Main page
+class Main extends React.Component{
+  render(){
+    if (this.props.activeTab == "1"){
+      return(
+      <div>
+        <p>Hei! Tervetuloa hyvän mielen animeseuran nettisivuille! Olemme tampereen yliopistolla
+        toimiva fiktiivinen animeseura jonka nettisivut on tehty harjoitustyötä varten!</p>
+        <p>Emme kokoonnu ikinä mutta voit katsoa fiktiivisen aikataulumme "aikataulu"-sivulta
+          tai liittyä seuran jäseneksi "kirjaudu sisään" -sivulta!</p>
+      </div>
+      );
+    }
+    else return null;
+  }
+}
+
+// Information page
+class Info extends React.Component{
+  render(){
+    if (this.props.activeTab == "2"){
+      return(
+      <div>
+        <h2>Aikataulu</h2>
+        <table>
+          <tr><th>Aika</th><th>Maanantai</th><th>Tiistai</th><th>Keskiviikko</th><th>Torstai</th>
+          <th>Perjantai</th><th>Lauantai</th><th>Sunnuntai</th></tr>
+          <tr><th>14-16</th><td>Yllätysanime</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+          <tr><th>16-18</th><td></td><td></td><td>Nyyttärit</td><td></td><td>Jojoperjantai</td><td></td><td></td></tr>
+          <tr><th>18-20</th><td></td><td></td><td></td><td></td><td></td><td></td><td>Sarazanmai-ilta</td></tr>
+        </table>
+      </div>
+      );
+    }
+    else { return null; }
+  }
+}
+
+// Current user's profile
+class Profile extends React.Component{
+
+  constructor(props){
+    super(props);
+      this.state = {
+        fieldname: "",
+        modified: "",
+        visibility: false,
+      };
+
+    this.handleChange = this.handleChange.bind(this);
+    this.handleSubmit = this.handleSubmit.bind(this);
+    this.handleDelete = this.handleDelete.bind(this);
+    this.toggleVisible = this.toggleVisible.bind(this);
+    this.handleModify = this.handleModify.bind(this);
+  }
+
+  // Change state
+  handleChange(event){
+    var name = event.target.name;
+    var value = event.target.value;
+    this.setState({
+      [name]: value
+    });
+  }
+
+  // Call modifyUser in <AppContent /> with values user wishes to change
+  handleSubmit(event){
+    event.preventDefault();
+    var url = "api/users/" + this.props.id;
+    var name = this.state.fieldname;
+    var value = this.state.modified;
+    this.setState({
+      fieldname: "",
+      modified: ""
+    });
+    this.props.handleSubmit(url, name, value);
+  }
+
+  // Mark membership fee as paid
+  handleModify(){
+    var url = "api/users/" + this.props.id;
+    var date = new Date(this.props.user.duedate);
+    var newduedate = new Date(date.getFullYear() + 1, date.getMonth(), date.getDate());
+    this.props.handleModify(url, "duedate", newduedate);
+  }
+
+  // Toggle change values -field
+  toggleVisible(id, display){
+    this.setState({
+      visibility: display,
+      fieldname: id
+    });
+  }
+
+  // Delete user
+  handleDelete(){
+    event.preventDefault();
+    var url = "api/users/" + this.props.id;
+    this.props.handleDelete(url);
+  }
+
+
+  render(){
+    if (this.props.activeTab == "5"){
+      var user = this.props.user;
+      var rooli = user.admin ? "Admin" : "Käyttäjä";
+      var now = new Date();
+      var myöh = (user.duedate > now) ? true : false;
+      var eräpvä = user.duedate.split("T")[0];
+
+      // If user hasn't paid membership fee they are shown this
+      var vis = this.state.visibility ? "block":"none";
+      var vis2 = this.state.myöh ? "block" : "none";
+
+      return (
+        <div>
+          <div style={{display: vis2}}>
+            <p>Hei! vaikuttaa siltä ettet ole vielä maksanut tämän vuoden jäsenmaksuasi!</p>
+            <button onClick={this.handleModify}>Paina tästä maksaaksesi</button>
+          </div>
+
+          <h1>{user.username}</h1>
+            <div>
+              <tr><td>Käyttäjätunnus</td><td>{user.username}</td><td><button onClick={(e) => this.toggleVisible("username", true)}>Muokkaa tietoja</button></td></tr>
+              <tr><td>Rooli</td><td>{rooli}</td></tr>
+              <tr><td>Sähköpostiosoite</td><td>{user.email}</td><td><button onClick={(e) => this.toggleVisible("email", true)}>Muokkaa tietoja</button></td></tr>
+              <tr><td>Kortin numero</td><td>{user.credit}</td><td><button onClick={(e) => this.toggleVisible("credit", true)}>Muokkaa tietoja</button></td></tr>
+              <tr><td>Jäsenmaksun eräpäivä</td><td>{eräpvä}</td></tr>
+              <button onClick={this.handleDelete}>Poista profiili</button>
+              <button onClick={(e) => this.toggleVisible("password", true)}>Vaihda salasanaa</button>
+            </div>
+
+            <div style={{display: vis}}>
+              <form name="modify" onSubmit={this.handleSubmit}>
+                <label>
+                  Uusi {this.state.fieldname}
+                  <input type="text" name="modified" value={this.state.modified} onChange={this.handleChange}></input>
+                </label><br />
+                <td><button onClick={(e) => this.toggleVisible("", false)}>Peruuta</button></td>
+                <input type="submit" value="submit" />
+              </form>
+            </div>
+        </div>
+      );
+    }
+    else return null;
+  }
+}
+
+// Page containing userlist for admin
+class Users extends React.Component{
+  constructor(props){
+    super(props);
+    this.state = {};
+    this.handleModify = this.handleModify.bind(this);
+    this.handleDelete = this.handleDelete.bind(this);
+  }
+
+  // Give user admin rights
+  handleModify(event, admin){
+    event.preventDefault();
+    var id = event.target.id;
+    var url = "api/users/" + id;
+    this.props.handleModify(url, "admin", !admin);
+  }
+
+  // Delete a user
+  handleDelete(event, id){
+    event.preventDefault();
+    var id = event.target.id;
+    var url = "api/users/" + id;
+    this.props.handleDelete(url);
+  }
+
+  render(){
+    if (this.props.activeTab == "4"){
+
+      // Create userlist
+      const userList = [];
+      for (var user in this.props.users){
+        var adminbool = this.props.users[user].admin;
+        var rooli = adminbool ? "Admin" : "Käyttäjä";
+        var now = new Date();
+        var myöh = (user.duedate > now) ? "Ei" : "Kyllä";
+        var nappi = this.props.users[user].admin ? "Poista oikeudet" : "Anna oikeudet";
+        var id = this.props.users[user].id;
+
+        userList.push(
+        <tr key={user}>
+          <td>{this.props.users[user].username}</td>
+          <td>{this.props.users[user].email}</td>
+          <td>{this.props.users[user].credit}</td>
+          <td>{myöh}</td>
+          <td>{rooli}</td>
+          <td><button id={id} onClick={(e) => this.handleModify(e, adminbool)}>{nappi}</button></td>
+          <td><button id={id} onClick={(e) => this.handleDelete(e)}>Poista</button></td>
+        </tr>
+        );
+      }
+      return(
+        <div>
+          <h2>Käyttäjät</h2>
+            <table>
+              <th>Käyttäjätunnus</th><th>Sähköposti</th><th>Kortti</th>
+              <th>Maksanut jäsenmaksun</th><th>Rooli</th><th>Admin-oikeudet</th><th>Poista käyttäjä</th>
+              {userList}
+            </table>
+        </div>
+      );
+    }
+    else return null;
+  }
+}
+
+// Form for registering as an user
+class RegisterForm extends React.Component{
+  constructor(props){
+    super(props);
+    this.state = {
+      username: "",
+      email: "",
+      password: "",
+      credit: "",
+    }
+    this.handleChange = this.handleChange.bind(this);
+    this.handleSubmit = this.handleSubmit.bind(this);
+  }
+
+  // Change state
+  handleChange(event){
+    var name = event.target.name;
+    var value = event.target.value;
+    this.setState({
+      [name]: value
+    });
+  }
+
+  // Submit values and call addUser in <AppContent />
+  handleSubmit(event){
+    event.preventDefault();
+    var username = this.state.username;
+    var email = this.state.email;
+    var password = this.state.password;
+    var credit = this.state.credit;
+    this.setState({
+      username: "",
+      email: "",
+      password: "",
+      credit: "",
+    });
+    this.props.handleSubmit(username, email, password, credit);
+  }
+
+  render(){
+    if (this.props.activeTab == "3"){
+      return (
+      <div>
+        <h2>Rekisteröidy käyttäjäksi</h2>
+        <form name="register" onSubmit={this.handleSubmit}>
+          <label>
+            Käyttäjätunnus
+            <input type="text" name="username" value={this.state.username} onChange={this.handleChange}></input>
+          </label>
+          <br />
+          <label>
+            Sähköpostiosoite
+            <input type="text" name="email" value={this.state.email} onChange={this.handleChange}></input>
+          </label>
+          <br />
+          <label>
+            Salasana
+            <input type="text" name="password" value={this.state.password} onChange={this.handleChange}></input>
+          </label>
+          <label>
+            Kortin numero
+            <input type="text" name="credit" value={this.state.credit} onChange={this.handleChange}></input>
+          </label>
+          <input type="submit" value="submit" />
+        </form>
+      </div>
+      );
+    }
+    else { return null; }
+  }
+}
+
+// Form for logging in
+class LogInForm extends React.Component{
+  constructor(props){
+    super(props);
+    this.state = {
+      username: "",
+      password: "",
+    }
+    this.handleChange = this.handleChange.bind(this);
+    this.handleSubmit = this.handleSubmit.bind(this);
+  }
+
+  // Change state
+  handleChange(event){
+    var name = event.target.name;
+    var value = event.target.value;
+    this.setState({
+      [name]: value
+    });
+  }
+
+  // Submit values and call login at <AppContent />
+  handleSubmit(event){
+    event.preventDefault();
+    var username = this.state.username;
+    var password = this.state.password;
+    this.setState({
+      username: "",
+      password: "",
+    });
+    this.props.handleSubmit(username, password);
+  }
+
+  render(){
+    if (this.props.activeTab == "3"){
+      return (
+      <div>
+        <h2>Kirjaudu sisään</h2>
+        <form name="login" onSubmit={this.handleSubmit}>
+          <label>
+            Käyttäjätunnus
+            <input type="text" name="username" value={this.state.username} onChange={this.handleChange}></input>
+          </label>
+          <br />
+          <label>
+            Salasana
+            <input type="text" name="password" value={this.state.password} onChange={this.handleChange}></input>
+          </label>
+          <input type="submit" value="submit" />
+        </form>
+      </div>
+      );
+    }
+    else { return null; }
+  }
+}
+
+// Error field
+function Error(props){
+  if (props.error){
+    return props.error;
+  }
+  else return null;
+}
+
+// The main page user is shown
+class AppContent extends React.Component{
+  constructor(props){
+    super(props);
+    this.state = {
+      activeTab: 1,   // which page is shown
+    };
+
+    this.handleRegister = this.handleRegister.bind(this);
+    this.handleLogin = this.handleLogin.bind(this);
+    this.handleLogout = this.handleLogout.bind(this);
+    this.setActiveTab = this.setActiveTab.bind(this);
+    this.handleModify = this.handleModify.bind(this);
+    this.handleDelete = this.handleDelete.bind(this);
+  }
+
+  // Log user in
+  handleLogin(username, password){
+    this.props.login(username, password);
+  }
+
+  // Register a new user
+  handleRegister(username, email, password, credit){
+    this.props.addUser(username, email, password, credit);
+  }
+
+  // Change user's values
+  handleModify(url, name, value){
+    this.props.modifyData(url, name, value);
+  }
+
+  // Change page
+  setActiveTab(id){
+    this.setState({
+      activeTab: id,
+    });
+  }
+
+  // Log user out
+  handleLogout(){
+    this.setState({
+      activeTab: 1
+    })
+    this.props.logout();
+  }
+
+  // Delet an user
+  handleDelete(url){
+    if (!this.props.admin){
+      this.setState({
+        activeTab: 1
+      })
+    }
+    this.props.deleteUser(url);
+  }
+
+  render(){
+    return (
+    <div>
+      <h1>Hyvän mielen animeseuran nettisivut</h1>
+      <Nav
+        handleClick={this.setActiveTab}
+        handleLogout={this.handleLogout}
+        admin={this.props.admin}
+        id={this.props.id}
+      />
+      <Error error={this.props.userdata_error} />
+      <Error error={this.props.user_error} />
+      <Error error={this.props.token_error} />
+      <Main
+        activeTab={this.state.activeTab}
+      />
+      <Info
+        activeTab={this.state.activeTab}
+      />
+      <Profile
+        activeTab={this.state.activeTab}
+        user={this.props.user}
+        id={this.props.id}
+        handleSubmit={this.handleModify}
+        handleDelete={this.handleDelete}
+        handleModify={this.handleModify}
+      />
+      <Users
+        activeTab={this.state.activeTab}
+        users={this.props.users}
+        handleDelete={this.handleDelete}
+        handleModify={this.handleModify}
+      />
+      <LogInForm
+        activeTab={this.state.activeTab}
+        handleSubmit={this.handleLogin}
+      />
+      <RegisterForm
+        activeTab={this.state.activeTab}
+        handleSubmit={this.handleRegister}
+      />
+    </div>
+    );
+  }
+}
+
+function mapStateToProps(state) {
+  return {
+    admin: state.token.admin,
+    id: state.token.id,
+    user: state.userData.user,
+    users: state.userList.users,
+    user_error: state.userData.error,
+    token_error: state.token.error,
+  };
+}
+
+const mapDispatchToProps = {
+  addUser: (username, email, password, credit) => addUser(username, email, password, credit),
+  login: (username, password) => login(username, password),
+  logout: () => logout(),
+  modifyData: (url, name, value) => modifyData(url, name, value),
+  deleteUser: (url) => deleteUser(url),
+};
+
+const App = connect(mapStateToProps, mapDispatchToProps)(AppContent);
+
+ReactDOM.render(
+ <Provider store={store}>
+    <App />
+ </Provider>,
+  document.getElementById('root')
+);
+</script>

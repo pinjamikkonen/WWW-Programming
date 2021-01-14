@@ -1,0 +1,44 @@
+<html>
+<div><a href="./">Etusivu</a></div>
+<div><a href="./info">Tietoa meistä</a></div>
+<div><a href="./login">Kirjaudu sisään</a></div>
+
+<body>
+  <h2>Kirjaudu sisään</h2>
+  <form action='./api/login' method='post'>
+    <label for="username">
+      Käyttäjätunnus
+      <input type="text" name="username" />
+    </label>
+    <br />
+    <label for="password">
+      Salasana
+      <input type="text" name="password" />
+    </label>
+    <input type="submit" value="submit" />
+  </form>
+
+  <h2>Rekisteröidy käyttäjäksi</h2>
+  <form action='api/users' method='post'>
+    <label>
+      Käyttäjätunnus
+      <input type="text" name="username"></input>
+    </label>
+    <br />
+    <label>
+      Sähköpostiosoite
+      <input type="text" name="email"></input>
+    </label>
+    <br />
+    <label>
+      Salasana
+      <input type="text" name="password"></input>
+    </label>
+    <label>
+      Maksutiedot
+      <input type="text" name="creditcard"></input>
+    </label>
+    <input type="submit" value="submit" /> -->
+  </form>
+</body>
+</html>
